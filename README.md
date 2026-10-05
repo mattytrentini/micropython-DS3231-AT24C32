@@ -1,7 +1,7 @@
 # micropython-DS3231-AT24C32
-MicroPython driver for DS3231 RTC and AT24C32 EEPROM module.
+MicroPython driver for the DS3231 RTC found on DS3231/AT24C32 modules.
 
-EEPROM Driver coming soon!
+This repository does not implement an AT24C32 EEPROM driver.
 
 ## DS3231N
 Driver for the Dallas DS3231, a highly accurate RTC IC.
@@ -12,11 +12,31 @@ Some care has been put into memory use, with most variables buffered when constr
 
 This driver implements both alarms and all available match triggers, interrupts and checks.
 
-Oscillator Stop Flag (OSF) is checked when displaying the time. Giving an indication of the validity of time data. When not printing to the REPL the OSF can be cheked manually.
+Oscillator Stop Flag (OSF) is checked when reading the time, with a warning printed if it is set. Check `ds.OSF()` before trusting the clock: `True` means the oscillator stopped, or has stopped in the past, and the time may be invalid.
 
 Square wave output and also the crystal output can be set.
 
 The temperature readout and aging offset options have not been implemented yet. I see no priority to implement temperature data since I can't come up with a plausible use case, but requests are welcome. As soon as I get access to a decent oscilloscope I will start playing with the aging offset features.
+
+## Installation
+
+Install the driver from the `mattytrentini` fork using `mpremote` on your host:
+
+```sh
+mpremote connect /dev/ttyACM0 mip install github:mattytrentini/micropython-DS3231-AT24C32
+```
+
+Replace `/dev/ttyACM0` with your board's serial port. Alternatively, on a
+network-connected MicroPython board with `mip` available:
+
+```python
+import mip
+mip.install("github:mattytrentini/micropython-DS3231-AT24C32")
+```
+
+The package installs only `ds3231.py`, has no external dependencies, and is
+imported with `from ds3231 import DS3231`. The driver retains its upstream API
+and runtime behavior.
 
 ## Usage
 
@@ -31,6 +51,22 @@ i2c = I2C(sda=Pin(4), scl=Pin(5))
 
 ds = DS3231(i2c)
 ```
+
+For a KinCony CO16, use I2C0 with SDA GPIO8, SCL GPIO18, and the RTC at `0x68`:
+
+```python
+from machine import Pin, I2C
+from ds3231 import DS3231
+
+i2c = I2C(0, sda=Pin(8), scl=Pin(18), freq=100_000)
+ds = DS3231(i2c, addr=0x68)
+if ds.OSF():
+    print("RTC time is not trustworthy; set it from a known-good source.")
+else:
+    print(ds.datetime())
+```
+
+This example only reads the RTC; it does not set the clock or clear its status.
 ### Time functions
 
 Example of setting the date and time:
@@ -47,18 +83,32 @@ datetime = (year, month, mday, hour, minute, second, weekday)
 ds.datetime(datetime)
 ```
 
-returns in format of the ESP8266 RTC:
-`(2020, 10, 3, 6, 13, 55, 30, 0) # (year, month, mday, wday, hour, minute, second, 0)`
+The getter `ds.datetime()` returns an eight-element tuple in ESP8266 RTC order:
+`(2020, 10, 3, 6, 13, 55, 30, 0) # (year, month, mday, weekday, hour, minute, second, 0)`
+
+**The setter and getter use different tuple orders.** The setter accepts
+`(year, month, mday, hour, minute[, second[, weekday]])`, not the getter's
+tuple. Do not pass a getter result directly back to `ds.datetime(...)`.
+Omitted seconds and weekday are written as zero; an explicitly supplied
+weekday follows the DS3231's 1–7 convention. Setting the clock clears OSF,
+so first check `ds.OSF()` and use a known-good time source when setting it.
 
 Set the ESP8266 internal RTC using the DS3231
 ```python
 import machine
 rtc = machine.RTC()
-rtc.datetime(ds.datetime)
+if not ds.OSF():
+    rtc.datetime(ds.datetime())
+else:
+    print("RTC time is not trustworthy; internal RTC left unchanged.")
 ```
 
 #### Get the date and time
-Call `ds.datetime()` to get the current date and time. This will print a warning on the REPL when the Oscillator Stop Flag (OSF) is set. When not using the REPL the OSF
+Call `ds.datetime()` to get the current date and time. It prints a warning when
+the Oscillator Stop Flag (OSF) is set, but still returns a tuple; that tuple
+must not be treated as reliable solely because it was returned. Read
+`ds.OSF()` before using the time, including before copying it to the internal
+RTC. Reading OSF or the date/time does not clear OSF.
 
 ### Alarm functions
 

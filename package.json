@@ -1,0 +1,7 @@
+{
+  "urls": [
+    ["ds3231.py", "github:mattytrentini/micropython-DS3231-AT24C32/ds3231.py"]
+  ],
+  "version": "1.0.0",
+  "deps": []
+}
