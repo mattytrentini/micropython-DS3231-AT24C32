@@ -67,6 +67,11 @@ else:
 ```
 
 This example only reads the RTC; it does not set the clock or clear its status.
+
+A read-only CO16 smoke verified that the mip-installed driver reads advancing
+time fields. OSF was set on that board, so the smoke did not trust the calendar,
+set the clock, clear OSF, or change alarm/output configuration.
+
 ### Time functions
 
 Example of setting the date and time:
